@@ -1,0 +1,53 @@
+version: "3"
+services:
+  db:
+    image: postgres:11-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wiki}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wikijsuser}
+      POSTGRES_USER: ${POSTGRES_USER:-wikijs}
+    restart: unless-stopped
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  search:
+    image: elasticsearch:7.17.6
+    volumes:
+      - wikijsindex:/usr/share/elasticsearch/data
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+#    ports:
+#      - 9200:9200
+    command:
+      - /bin/sh
+      - -c
+      - "./bin/elasticsearch-plugin list | grep -q analysis-kuromoji
+        || ./bin/elasticsearch-plugin install analysis-kuromoji;
+        ./bin/elasticsearch-plugin list | grep -q analysis-icu
+        || ./bin/elasticsearch-plugin install analysis-icu;
+        /usr/local/bin/docker-entrypoint.sh"
+    restart: unless-stopped
+
+  wiki:
+    image: requarks/wiki:2
+    depends_on:
+      - db
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-wikijs}
+      DB_PASS: ${POSTGRES_PASSWORD:-wikijsuser}
+      DB_NAME: ${POSTGRES_DB:-wiki}
+    restart: unless-stopped
+    ports:
+      - "8090:3000"
+
+volumes:
+  db-data:
+  wikijsindex:
